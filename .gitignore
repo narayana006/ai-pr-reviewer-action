@@ -1,9 +1,8 @@
 node_modules/
-.next/
 dist/
 build/
+coverage/
 .env
 .env*.local
-.vercel/
-coverage/
+*.tsbuildinfo
 .DS_Store
