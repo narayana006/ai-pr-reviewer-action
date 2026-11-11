@@ -1,0 +1,50 @@
+name: AI PR Reviewer
+description: Reviews pull request diffs against rules written in .ai-review.md and comments only on confident findings.
+author: Narayana Vemburaj
+branding:
+  icon: check-square
+  color: blue
+
+inputs:
+  rules:
+    description: Path to the rules file, relative to the workspace.
+    default: .ai-review.md
+  confidence-threshold:
+    description: Minimum confidence (0 to 1) a finding needs before it is reported.
+    default: "0.8"
+  max-comments:
+    description: Maximum number of inline comments posted in one run.
+    default: "20"
+  github-token:
+    description: Token used to read the pull request diff and post the review.
+    default: ${{ github.token }}
+  dry-run:
+    description: When "true", print findings to the log and post nothing.
+    default: "false"
+  fail-on-findings:
+    description: When "true", fail the step if any finding meets the threshold.
+    default: "false"
+  diff-file:
+    description: Review this unified diff file instead of the pull request. Nothing is posted when set.
+    default: ""
+  model-endpoint:
+    description: >-
+      Optional HTTPS URL of a chat-completions style endpoint. Leave empty (the default) to run
+      only the deterministic pattern checks.
+    default: ""
+  model-api-key:
+    description: Bearer token for model-endpoint. Pass it from a repository secret.
+    default: ""
+  model-name:
+    description: Model name sent to model-endpoint, if the endpoint needs one.
+    default: ""
+
+outputs:
+  findings-count:
+    description: Number of findings at or above the confidence threshold.
+  comments-posted:
+    description: Number of inline comments posted in this run.
+
+runs:
+  using: node24
+  main: dist/index.js
