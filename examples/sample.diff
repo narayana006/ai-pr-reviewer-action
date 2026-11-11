@@ -1,0 +1,47 @@
+diff --git a/src/billing/invoice.ts b/src/billing/invoice.ts
+index 3f1c2aa..9b7d410 100644
+--- a/src/billing/invoice.ts
++++ b/src/billing/invoice.ts
+@@ -1,5 +1,6 @@
+ import { logger } from "../logger";
+ import type { Order } from "../orders/types";
++import { fetchRates } from "./rates";
+ 
+ const TAX_RATE = 0.2;
+ 
+@@ -12,9 +13,13 @@ export function lineTotal(quantity: number, unitCents: number): number {
+ }
+ 
+ export async function buildInvoice(order: Order) {
+-  const subtotal = order.lines.reduce((sum, l) => sum + lineTotal(l.quantity, l.unitCents), 0);
+-  logger.debug("subtotal computed", { orderId: order.id });
++  const rates = await fetchRates("http://api.example.com/v2/rates");
++  const subtotal = order.lines.reduce((sum, l) => sum + l.quantity * (l.unitCents / 100), 0);
++  console.log("subtotal", subtotal, rates);
++  // TODO handle multi-currency orders
++  // TODO(#482) round per line once finance confirms
+   const tax = subtotal * TAX_RATE;
++  const apiKey = "example-key-not-real-123";
+   return { orderId: order.id, subtotal, tax, total: subtotal + tax };
+ }
+ 
+diff --git a/src/billing/invoice.test.ts b/src/billing/invoice.test.ts
+index 77aa001..c0d91be 100644
+--- a/src/billing/invoice.test.ts
++++ b/src/billing/invoice.test.ts
+@@ -8,4 +8,5 @@ describe("buildInvoice", () => {
+   it("adds tax", async () => {
+     const invoice = await buildInvoice(sampleOrder);
++    console.log(invoice);
+     expect(invoice.total).toBeGreaterThan(invoice.subtotal);
+   });
+diff --git a/docs/setup.md b/docs/setup.md
+new file mode 100644
+index 0000000..5d2a1f3
+--- /dev/null
++++ b/docs/setup.md
+@@ -0,0 +1,4 @@
++# Local setup
++
++Point the client at http://api.example.com while developing.
++Run `npm start` and open the dashboard.

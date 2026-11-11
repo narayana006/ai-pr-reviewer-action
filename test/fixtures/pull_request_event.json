@@ -1,0 +1,5 @@
+{
+  "action": "synchronize",
+  "pull_request": { "number": 7, "head": { "sha": "0123456789abcdef0123456789abcdef01234567" } },
+  "repository": { "name": "shop-service", "owner": { "login": "example-org" } }
+}
