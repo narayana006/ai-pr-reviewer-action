@@ -1,0 +1,24 @@
+{
+  "name": "ai-pr-reviewer-action",
+  "version": "0.1.0",
+  "private": true,
+  "description": "GitHub Action that reviews pull request diffs against rules written in .ai-review.md",
+  "license": "MIT",
+  "author": "Narayana Vemburaj",
+  "main": "dist/index.js",
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "esbuild src/main.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/index.js",
+    "pretest": "tsc",
+    "test": "node --test \"build/test/*.test.js\"",
+    "review": "node dist/index.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "esbuild": "0.25.10",
+    "typescript": "^5.6.0"
+  }
+}
