@@ -220,3 +220,20 @@ export function addedLineIndex(files: FileDiff[]): Set<string> {
   }
   return index;
 }
+
+/**
+ * True when `start..end` is a range a multi-line review comment can cover:
+ * both ends are new-side lines (added or context) of the same hunk, `start`
+ * comes before `end`, and `end` is an added line.
+ */
+export function isCommentableRange(files: FileDiff[], path: string, start: number, end: number): boolean {
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start >= end) return false;
+  const file = files.find((f) => f.path === path && f.status !== "deleted" && !f.binary);
+  if (!file) return false;
+  return file.hunks.some((hunk) => {
+    const newSide = hunk.lines.filter((l) => l.kind !== "del");
+    const first = newSide.find((l) => l.newLine === start);
+    const last = newSide.find((l) => l.newLine === end);
+    return first !== undefined && last !== undefined && last.kind === "add";
+  });
+}

@@ -15,7 +15,7 @@ import { resolve } from "node:path";
 import { parseDiff } from "./diff";
 import { createRestClient, GitHubApiError, type GitHubClient } from "./github";
 import { createHttpReviewer, type ModelReviewer } from "./model";
-import { formatReport, postReview, reviewDiff, type ReviewResult } from "./review";
+import { findingLocation, formatReport, postReview, reviewDiff, type ReviewResult } from "./review";
 import { parseRules, type Rule } from "./rules";
 
 export interface Settings {
@@ -255,7 +255,7 @@ function writeSummary(env: Env, result: ReviewResult, threshold: number): void {
   if (!env.GITHUB_STEP_SUMMARY) return;
   const cell = (text: string) => text.replace(/\|/g, "\\|").replace(/\s*\n\s*/g, " ");
   const rows = result.findings.map(
-    (f) => `| \`${f.path}:${f.line}\` | ${cell(f.rule)} | ${f.confidence.toFixed(2)} | ${cell(f.message)} |`,
+    (f) => `| \`${findingLocation(f)}\` | ${cell(f.rule)} | ${f.confidence.toFixed(2)} | ${cell(f.message)} |`,
   );
   const summary = [
     "### Rule review",

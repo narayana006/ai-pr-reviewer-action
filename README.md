@@ -2,7 +2,7 @@
 
 A GitHub Action that reviews a pull request diff against rules your team writes in `.ai-review.md`, and leaves inline comments only for findings above a confidence threshold.
 
-**Status: first working version (0.1).** Deterministic rule checks, path scoping, the confidence threshold, inline comments with suggested fixes and a dry-run/command-line mode all work today and are covered by tests. The model reviewer is implemented as an optional HTTP client and is off unless you configure an endpoint; it has only been tested against a fake endpoint, never against a real model service. Posting comments has been tested against a fake GitHub client, not yet on a live pull request. There is no `v1` tag yet, so pin to `main` or a commit SHA.
+**Status: first working version (0.1).** Deterministic rule checks, path scoping, the confidence threshold, inline comments with suggested fixes (including multi-line ranges from the model reviewer) and a dry-run/command-line mode all work today and are covered by tests. The model reviewer is implemented as an optional HTTP client and is off unless you configure an endpoint; it has only been tested against a fake endpoint, never against a real model service. Posting comments has been tested against a fake GitHub client, not yet on a live pull request. There is no `v1` tag yet, so pin to `main` or a commit SHA.
 
 ## How it works
 
@@ -145,6 +145,10 @@ What happens when it is on:
 - If the endpoint fails or returns something unusable, a warning is logged and the deterministic findings are still reported.
 - The endpoint must be `https` (plain `http` is accepted for `localhost` only).
 
+### Multi-line findings
+
+A model finding may cover several lines. It adds `"start_line"` (the first line) and sets `"line"` to the last line. Both lines must be in the same hunk of the diff, and the last one must be an added line. Such a finding is posted as one comment over the whole range, and its suggestion replaces every line in the range. The text report shows it as `path:16-17`. If the range is not valid (for example it spans two hunks), the finding is kept on its last line and the suggestion is dropped, because a fix written for several lines would break the file if applied to one. Pattern rules always report one line.
+
 ## Features
 
 - [x] Rules written in plain English in `.ai-review.md` (with optional patterns for deterministic checks)
@@ -154,13 +158,13 @@ What happens when it is on:
 - [x] Provider-agnostic model configuration (one HTTP endpoint, off by default)
 - [ ] Verified against a live pull request and a real model endpoint
 - [ ] Tagged `v1` release
-- [ ] Multi-line findings and suggestions
+- [x] Multi-line findings and suggestions (from the model reviewer; pattern rules stay single-line)
 - [ ] Splitting large diffs across several model requests
 
 ## Limitations
 
 - Plain-English rules without a `pattern` do nothing unless a model endpoint is configured.
-- Patterns are matched one added line at a time. They cannot see context, removed lines or constructs that span lines.
+- Patterns are matched one added line at a time. They cannot see context, removed lines or constructs that span lines. Only the model reviewer can report a finding that spans several lines.
 - The model path has been exercised only with fakes. Reply quality, token limits and cost with a real service are untested. The diff sent to the model is capped at about 60,000 characters; files that do not fit are skipped and listed in the log.
 - Diff content is untrusted input to the model. Findings are validated against your rules and the diff, but a model can still be wrong or be steered by text in the diff.
 - GitHub refuses to return very large pull request diffs (roughly more than 300 files); the action fails with GitHub's error in that case.

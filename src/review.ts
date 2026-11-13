@@ -104,11 +104,11 @@ export async function postReview(
   result.overLimit = fresh.length - chosen.length;
   if (chosen.length === 0) return result;
 
-  const comments: ReviewComment[] = chosen.map((f) => ({
-    path: f.path,
-    line: f.line,
-    body: formatComment(f),
-  }));
+  const comments: ReviewComment[] = chosen.map((f) => {
+    const comment: ReviewComment = { path: f.path, line: f.line, body: formatComment(f) };
+    if (f.startLine !== undefined) comment.startLine = f.startLine;
+    return comment;
+  });
   const noun = comments.length === 1 ? "finding" : "findings";
   let body = `Automated review against \`.ai-review.md\`: ${comments.length} ${noun}.`;
   if (result.overLimit > 0) {
@@ -119,13 +119,20 @@ export async function postReview(
   return result;
 }
 
+/** "path:line", or "path:start-end" for a multi-line finding. */
+export function findingLocation(f: Finding): string {
+  return f.startLine === undefined ? `${f.path}:${f.line}` : `${f.path}:${f.startLine}-${f.line}`;
+}
+
 /** Plain-text report used by the CLI, dry runs and the action log. */
 export function formatReport(result: ReviewResult, threshold: number): string {
   const lines: string[] = [];
   for (const f of result.findings) {
-    lines.push(`${f.path}:${f.line}  [${f.rule}]  confidence ${f.confidence.toFixed(2)}  (${f.source})`);
+    lines.push(`${findingLocation(f)}  [${f.rule}]  confidence ${f.confidence.toFixed(2)}  (${f.source})`);
     lines.push(`    ${f.message.split("\n").join("\n    ")}`);
-    if (f.suggestion !== undefined) lines.push(`    suggested fix: ${f.suggestion.trim()}`);
+    if (f.suggestion !== undefined) {
+      lines.push(`    suggested fix: ${f.suggestion.trim().split("\n").join("\n                   ")}`);
+    }
   }
   const count = result.findings.length;
   lines.push(

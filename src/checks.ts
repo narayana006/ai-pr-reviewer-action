@@ -6,12 +6,14 @@ import { ruleApplies, type Rule } from "./rules";
 export interface Finding {
   rule: string;
   path: string;
-  /** Line number on the new side of the diff. */
+  /** Line number on the new side of the diff (the last line for a multi-line finding). */
   line: number;
+  /** First line of a multi-line finding; absent when the finding covers one line. */
+  startLine?: number;
   message: string;
   /** 0 to 1. */
   confidence: number;
-  /** Full replacement text for the line, when a fix can be suggested. */
+  /** Full replacement text for the line (or the whole range), when a fix can be suggested. */
   suggestion?: string;
   source: "rule" | "model";
 }

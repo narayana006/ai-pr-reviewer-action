@@ -120,3 +120,21 @@ test("no findings means no API calls at all", async () => {
   assert.deepEqual(await postReview(github, pr, "abc123", [], 20), { posted: 0, duplicates: 0, overLimit: 0 });
   assert.equal(github.reviews.length, 0);
 });
+
+test("multi-line findings are posted as range comments and reported as start-end", async () => {
+  const ranged: Finding = {
+    ...modelFinding,
+    startLine: 16,
+    suggestion: "  const rates = await fetchRates(RATES_URL);\n  const subtotalCents = sumCents(order.lines);",
+  };
+  const github = new FakeGitHub("");
+  await postReview(github, pr, "abc123", [ranged], 10);
+  const [comment] = github.reviews[0]!.comments;
+  assert.equal(comment!.startLine, 16);
+  assert.equal(comment!.line, 17);
+  assert.match(comment!.body, /```suggestion\n {2}const rates = .*\n {2}const subtotalCents/);
+
+  const report = formatReport({ findings: [ranged], belowThreshold: [] }, 0.8);
+  assert.match(report, /^src\/billing\/invoice\.ts:16-17 {2}\[Money is never a float\]/);
+  assert.match(report, /suggested fix: const rates = .*\n {19} {2}const subtotalCents/);
+});

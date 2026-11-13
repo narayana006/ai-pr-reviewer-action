@@ -120,3 +120,42 @@ test("leaves out files that do not fit in the size budget", () => {
   assert.ok(text.length <= 900);
   assert.deepEqual(renderDiffForModel(files, 60_000).omittedFiles, []);
 });
+
+test("keeps multi-line findings whose range fits in one hunk", () => {
+  const multi = {
+    ...floatFinding,
+    start_line: 16,
+    line: 17,
+    suggestion: "  const rates = await fetchRates(RATES_URL);\n  const subtotalCents = sumCents(order.lines);",
+  };
+  const [finding] = parseModelFindings(JSON.stringify({ findings: [multi] }), { rules, files });
+  assert.equal(finding!.startLine, 16);
+  assert.equal(finding!.line, 17);
+  assert.equal(finding!.suggestion, multi.suggestion);
+
+  // start_line equal to line is an ordinary single-line finding.
+  const [single] = parseModelFindings(JSON.stringify([{ ...floatFinding, start_line: 17 }]), { rules, files });
+  assert.equal(single!.startLine, undefined);
+  assert.ok(single!.suggestion);
+});
+
+test("falls back to one line and drops the suggestion when the range is unusable", () => {
+  const reply = JSON.stringify([
+    { ...floatFinding, start_line: 3 }, // crosses into another hunk
+    { ...floatFinding, start_line: 20 }, // after the end line
+  ]);
+  const findings = parseModelFindings(reply, { rules, files });
+  assert.equal(findings.length, 2);
+  for (const f of findings) {
+    assert.equal(f.line, 17);
+    assert.equal(f.startLine, undefined);
+    assert.equal(f.suggestion, undefined);
+  }
+});
+
+test("tells the model how to report multi-line findings", async () => {
+  const { fetch, calls } = fakeFetch([{ body: '{"findings": []}' }]);
+  await createHttpReviewer({ endpoint: "https://models.example.com/review", fetch }).review({ rules, files });
+  const system = (JSON.parse(calls[0]!.body!) as { messages: { content: string }[] }).messages[0]!.content;
+  assert.match(system, /"start_line"/);
+});

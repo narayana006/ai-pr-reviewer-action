@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { addedLineIndex, addedLines, parseDiff } from "../src/diff";
+import { addedLineIndex, addedLines, isCommentableRange, parseDiff } from "../src/diff";
 import { fixture } from "./helpers";
 
 test("parses files, statuses and hunk headers from a git diff", () => {
@@ -139,4 +139,16 @@ test("reads quoted paths, paths with spaces and CRLF line endings", () => {
 test("returns nothing for empty or non-diff input", () => {
   assert.deepEqual(parseDiff(""), []);
   assert.deepEqual(parseDiff("just some text\nnot a diff\n"), []);
+});
+
+test("recognises ranges a multi-line comment can cover", () => {
+  const files = parseDiff(fixture("sample.diff"));
+  const path = "src/billing/invoice.ts";
+  assert.equal(isCommentableRange(files, path, 16, 18), true);
+  assert.equal(isCommentableRange(files, path, 14, 17), true, "a context line may start the range");
+  assert.equal(isCommentableRange(files, path, 16, 21), false, "the last line must be an added line");
+  assert.equal(isCommentableRange(files, path, 3, 17), false, "the range may not span two hunks");
+  assert.equal(isCommentableRange(files, path, 17, 17), false);
+  assert.equal(isCommentableRange(files, path, 18, 16), false);
+  assert.equal(isCommentableRange(files, "src/other.ts", 16, 17), false);
 });

@@ -17,6 +17,8 @@ export interface ExistingComment {
 export interface ReviewComment {
   path: string;
   line: number;
+  /** First line of a multi-line comment. */
+  startLine?: number;
   body: string;
 }
 
@@ -110,12 +112,18 @@ export function createRestClient(options: RestClientOptions): GitHubClient {
         commit_id: review.commitId,
         event: "COMMENT",
         body: review.body,
-        comments: review.comments.map((c) => ({
-          path: c.path,
-          line: c.line,
-          side: "RIGHT",
-          body: c.body,
-        })),
+        comments: review.comments.map((c) =>
+          c.startLine === undefined
+            ? { path: c.path, line: c.line, side: "RIGHT", body: c.body }
+            : {
+                path: c.path,
+                start_line: c.startLine,
+                start_side: "RIGHT",
+                line: c.line,
+                side: "RIGHT",
+                body: c.body,
+              },
+        ),
       });
     },
   };

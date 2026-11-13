@@ -188,6 +188,17 @@ function addedLineIndex(files) {
   }
   return index;
 }
+function isCommentableRange(files, path, start, end) {
+  if (!Number.isInteger(start) || !Number.isInteger(end) || start >= end) return false;
+  const file = files.find((f) => f.path === path && f.status !== "deleted" && !f.binary);
+  if (!file) return false;
+  return file.hunks.some((hunk) => {
+    const newSide = hunk.lines.filter((l) => l.kind !== "del");
+    const first = newSide.find((l) => l.newLine === start);
+    const last = newSide.find((l) => l.newLine === end);
+    return first !== void 0 && last !== void 0 && last.kind === "add";
+  });
+}
 
 // src/github.ts
 var GitHubApiError = class extends Error {
@@ -252,12 +263,16 @@ function createRestClient(options) {
         commit_id: review.commitId,
         event: "COMMENT",
         body: review.body,
-        comments: review.comments.map((c) => ({
-          path: c.path,
-          line: c.line,
-          side: "RIGHT",
-          body: c.body
-        }))
+        comments: review.comments.map(
+          (c) => c.startLine === void 0 ? { path: c.path, line: c.line, side: "RIGHT", body: c.body } : {
+            path: c.path,
+            start_line: c.startLine,
+            start_side: "RIGHT",
+            line: c.line,
+            side: "RIGHT",
+            body: c.body
+          }
+        )
       });
     }
   };
@@ -429,6 +444,9 @@ var SYSTEM_PROMPT = [
   'Reply with JSON only, in this shape: {"findings": [{"rule": "<rule name>", "path": "<file path>",',
   '"line": <new line number>, "message": "<one or two sentences>", "confidence": <0 to 1>,',
   '"suggestion": "<optional full replacement for that line>"}]}.',
+  'When a violation spans several lines, add "start_line": <first new line number> and make "line"',
+  "the last added line of the violation; both must be in the same hunk, and a suggestion then",
+  "replaces every line from start_line to line.",
   'If nothing violates the rules reply with {"findings": []}.'
 ].join(" ");
 function validateEndpoint(endpoint) {
@@ -519,6 +537,15 @@ function parseModelFindings(reply, request) {
     };
     if (typeof raw.suggestion === "string" && raw.suggestion.trim() !== "") {
       finding.suggestion = raw.suggestion.replace(/\r?\n$/, "");
+    }
+    const rawStart = raw.start_line ?? raw.startLine;
+    if (rawStart !== void 0 && rawStart !== null && Number(rawStart) !== line) {
+      const start = Number(rawStart);
+      if (isCommentableRange(request.files, path, start, line)) {
+        finding.startLine = start;
+      } else {
+        delete finding.suggestion;
+      }
     }
     findings.push(finding);
   }
@@ -667,11 +694,11 @@ async function postReview(client, pr, commitId, findings, maxComments) {
   const chosen = [...fresh].sort((a, b) => b.confidence - a.confidence).slice(0, maxComments);
   result.overLimit = fresh.length - chosen.length;
   if (chosen.length === 0) return result;
-  const comments = chosen.map((f) => ({
-    path: f.path,
-    line: f.line,
-    body: formatComment(f)
-  }));
+  const comments = chosen.map((f) => {
+    const comment = { path: f.path, line: f.line, body: formatComment(f) };
+    if (f.startLine !== void 0) comment.startLine = f.startLine;
+    return comment;
+  });
   const noun = comments.length === 1 ? "finding" : "findings";
   let body = `Automated review against \`.ai-review.md\`: ${comments.length} ${noun}.`;
   if (result.overLimit > 0) {
@@ -681,12 +708,17 @@ async function postReview(client, pr, commitId, findings, maxComments) {
   result.posted = comments.length;
   return result;
 }
+function findingLocation(f) {
+  return f.startLine === void 0 ? `${f.path}:${f.line}` : `${f.path}:${f.startLine}-${f.line}`;
+}
 function formatReport(result, threshold) {
   const lines = [];
   for (const f of result.findings) {
-    lines.push(`${f.path}:${f.line}  [${f.rule}]  confidence ${f.confidence.toFixed(2)}  (${f.source})`);
+    lines.push(`${findingLocation(f)}  [${f.rule}]  confidence ${f.confidence.toFixed(2)}  (${f.source})`);
     lines.push(`    ${f.message.split("\n").join("\n    ")}`);
-    if (f.suggestion !== void 0) lines.push(`    suggested fix: ${f.suggestion.trim()}`);
+    if (f.suggestion !== void 0) {
+      lines.push(`    suggested fix: ${f.suggestion.trim().split("\n").join("\n                   ")}`);
+    }
   }
   const count = result.findings.length;
   lines.push(
@@ -878,7 +910,7 @@ function writeSummary(env, result, threshold) {
   if (!env.GITHUB_STEP_SUMMARY) return;
   const cell = (text) => text.replace(/\|/g, "\\|").replace(/\s*\n\s*/g, " ");
   const rows = result.findings.map(
-    (f) => `| \`${f.path}:${f.line}\` | ${cell(f.rule)} | ${f.confidence.toFixed(2)} | ${cell(f.message)} |`
+    (f) => `| \`${findingLocation(f)}\` | ${cell(f.rule)} | ${f.confidence.toFixed(2)} | ${cell(f.message)} |`
   );
   const summary = [
     "### Rule review",

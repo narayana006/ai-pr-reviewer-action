@@ -59,3 +59,16 @@ test("turns API failures into errors with the status and GitHub's message", asyn
     return true;
   });
 });
+
+test("sends start_line and start_side for multi-line comments", async () => {
+  const { fetch, calls } = fakeFetch([{ body: "{}" }]);
+  const client = createRestClient({ token: "t", fetch });
+  await client.createReview(pr, {
+    commitId: "abc123",
+    body: "summary",
+    comments: [{ path: "src/a.ts", startLine: 10, line: 12, body: "note" }],
+  });
+  assert.deepEqual((JSON.parse(calls[0]!.body!) as { comments: unknown[] }).comments, [
+    { path: "src/a.ts", start_line: 10, start_side: "RIGHT", line: 12, side: "RIGHT", body: "note" },
+  ]);
+});

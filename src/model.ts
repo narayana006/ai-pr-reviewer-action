@@ -9,7 +9,7 @@
  */
 
 import type { Finding } from "./checks";
-import { addedLineIndex, type FileDiff } from "./diff";
+import { addedLineIndex, isCommentableRange, type FileDiff } from "./diff";
 import { ruleApplies, type Rule } from "./rules";
 
 export interface ReviewRequest {
@@ -53,6 +53,9 @@ const SYSTEM_PROMPT = [
   'Reply with JSON only, in this shape: {"findings": [{"rule": "<rule name>", "path": "<file path>",',
   '"line": <new line number>, "message": "<one or two sentences>", "confidence": <0 to 1>,',
   '"suggestion": "<optional full replacement for that line>"}]}.',
+  'When a violation spans several lines, add "start_line": <first new line number> and make "line"',
+  "the last added line of the violation; both must be in the same hunk, and a suggestion then",
+  "replaces every line from start_line to line.",
   'If nothing violates the rules reply with {"findings": []}.',
 ].join(" ");
 
@@ -160,6 +163,18 @@ export function parseModelFindings(reply: string, request: ReviewRequest): Findi
     };
     if (typeof raw.suggestion === "string" && raw.suggestion.trim() !== "") {
       finding.suggestion = raw.suggestion.replace(/\r?\n$/, "");
+    }
+    const rawStart = raw.start_line ?? raw.startLine;
+    if (rawStart !== undefined && rawStart !== null && Number(rawStart) !== line) {
+      const start = Number(rawStart);
+      if (isCommentableRange(request.files, path, start, line)) {
+        finding.startLine = start;
+      } else {
+        // The range cannot be commented on as given. Keep the finding on its
+        // last line, but drop the suggestion: it was written to replace the
+        // whole range and would corrupt the file if applied to one line.
+        delete finding.suggestion;
+      }
     }
     findings.push(finding);
   }
